@@ -1,0 +1,7 @@
+name: a0_chat_buttons
+title: A0 Chat Buttons
+version: 1.3.0
+description: Adds Copy URL, Rename, Close and Stop buttons to the chat input action bar for sharing a chat link, naming a chat, dismissing the chat view and cancelling a running agent process.
+settings_sections: []
+per_project_config: false
+per_agent_config: false

@@ -1,0 +1,409 @@
+<html>
+
+<head>
+  <script type="module">
+    import { store as chatsStore } from "/components/sidebar/chats/chats-store.js";
+    import { toastFrontendSuccess, toastFrontendError, toastFrontendInfo } from "/components/notifications/notification-store.js";
+
+    const PLUGIN_TITLE = "A0 Chat Buttons";
+    const RENAME_ENDPOINT = "/plugins/a0_chat_buttons/rename_chat";
+    const STOP_ENDPOINT = "/plugins/a0_chat_buttons/stop_process";
+    const MAX_NAME_LENGTH = 120;
+
+    function currentContextId() {
+      try {
+        const id = chatsStore?.selected || globalThis.getContext?.();
+        return id ? String(id) : "";
+      } catch (_e) {
+        return "";
+      }
+    }
+
+    function currentContextRow() {
+      const id = currentContextId();
+      if (!id) return null;
+      try {
+        return (chatsStore?.contexts || []).find((row) => row.id === id) || null;
+      } catch (_e) {
+        return null;
+      }
+    }
+
+    function currentDisplayName() {
+      const row = currentContextRow();
+      if (!row) return "";
+      try {
+        const label = chatsStore?.displayName?.(row);
+        if (label) return String(label);
+      } catch (_e) { }
+      return row.name ? String(row.name) : "";
+    }
+
+    function buildShareUrl(ctxid) {
+      const url = new URL(window.location.href);
+      url.search = "";
+      url.hash = "";
+      url.searchParams.set("ctxid", ctxid);
+      return url.toString();
+    }
+
+    async function copyText(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      if (!ok) throw new Error("Copy command was rejected by the browser");
+    }
+
+    function toastInfo(message) {
+      try {
+        if (typeof toastFrontendInfo === "function") {
+          toastFrontendInfo(message, PLUGIN_TITLE);
+          return;
+        }
+      } catch (_e) { }
+      try {
+        toastFrontendSuccess(message, PLUGIN_TITLE);
+      } catch (_e) { }
+    }
+
+    /* ---------------- Copy URL ---------------- */
+
+    globalThis._copyChatShareUrl = async function () {
+      const ctxid = currentContextId();
+      if (!ctxid) {
+        toastFrontendError("Open a chat first, then copy its link.", PLUGIN_TITLE);
+        return;
+      }
+      try {
+        await copyText(buildShareUrl(ctxid));
+        toastFrontendSuccess("Chat link copied to clipboard.", PLUGIN_TITLE);
+      } catch (e) {
+        toastFrontendError("Could not copy the link: " + e.message, PLUGIN_TITLE);
+      }
+    };
+
+    /* ---------------- Rename chat ---------------- */
+
+    let renameOverlay = null;
+
+    function closeRenameDialog() {
+      if (!renameOverlay) return;
+      const node = renameOverlay;
+      renameOverlay = null;
+      node.remove();
+    }
+
+    async function submitRename(ctxid, input, errorEl, saveBtn) {
+      const name = String(input.value || "").trim();
+      if (name.length > MAX_NAME_LENGTH) {
+        errorEl.textContent = `Name is too long (max ${MAX_NAME_LENGTH} characters).`;
+        return;
+      }
+
+      errorEl.textContent = "";
+      saveBtn.disabled = true;
+      input.disabled = true;
+      try {
+        await globalThis.sendJsonData(RENAME_ENDPOINT, { context: ctxid, name });
+        closeRenameDialog();
+        toastFrontendSuccess(name ? "Chat renamed." : "Chat name reset.", PLUGIN_TITLE);
+      } catch (e) {
+        errorEl.textContent = "Could not rename the chat: " + (e?.message || e);
+      } finally {
+        saveBtn.disabled = false;
+        input.disabled = false;
+        input.focus();
+      }
+    }
+
+    globalThis._openChatRename = function () {
+      const ctxid = currentContextId();
+      if (!ctxid) {
+        toastFrontendError("Open a chat first, then rename it.", PLUGIN_TITLE);
+        return;
+      }
+      if (renameOverlay) {
+        renameOverlay.querySelector("input")?.focus();
+        return;
+      }
+
+      const overlay = document.createElement("div");
+      overlay.className = "csl-overlay";
+      overlay.innerHTML = `
+        <div class="csl-dialog" role="dialog" aria-modal="true" aria-label="Rename chat">
+          <h3 class="csl-title">Rename chat</h3>
+          <p class="csl-hint">Leave the field empty to restore the default name.</p>
+          <input class="csl-input" type="text" maxlength="${MAX_NAME_LENGTH}" placeholder="Chat name" />
+          <p class="csl-error" role="alert"></p>
+          <div class="csl-actions">
+            <button type="button" class="csl-btn csl-cancel">Cancel</button>
+            <button type="button" class="csl-btn csl-save">Save</button>
+          </div>
+        </div>`;
+
+      const input = overlay.querySelector("input");
+      const errorEl = overlay.querySelector(".csl-error");
+      const saveBtn = overlay.querySelector(".csl-save");
+      const cancelBtn = overlay.querySelector(".csl-cancel");
+
+      input.value = currentDisplayName();
+
+      const onKeyDown = (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeRenameDialog();
+        } else if (event.key === "Enter") {
+          event.preventDefault();
+          submitRename(ctxid, input, errorEl, saveBtn);
+        }
+      };
+
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) closeRenameDialog();
+      });
+      cancelBtn.addEventListener("click", closeRenameDialog);
+      saveBtn.addEventListener("click", () => submitRename(ctxid, input, errorEl, saveBtn));
+      overlay.addEventListener("keydown", onKeyDown);
+
+      document.body.appendChild(overlay);
+      renameOverlay = overlay;
+
+      setTimeout(() => {
+        input.focus();
+        input.select();
+      }, 30);
+    };
+
+    /* ---------------- Close chat ---------------- */
+
+    globalThis._closeCurrentChat = function () {
+      const ctxid = currentContextId();
+      if (!ctxid) {
+        toastFrontendError("There is no open chat to close.", PLUGIN_TITLE);
+        return;
+      }
+      try {
+        closeRenameDialog();
+        if (typeof globalThis.deselectChat === "function") {
+          globalThis.deselectChat();
+        } else if (typeof chatsStore?.deselectChat === "function") {
+          chatsStore.deselectChat();
+        }
+        toastInfo("Chat closed. It is still available in the sidebar.");
+      } catch (e) {
+        toastFrontendError("Could not close the chat: " + (e?.message || e), PLUGIN_TITLE);
+      }
+    };
+
+    /* ---------------- Stop process ---------------- */
+
+    globalThis._stopChatProcess = async function () {
+      const ctxid = currentContextId();
+      if (!ctxid) {
+        toastFrontendError("There is no active chat to stop.", PLUGIN_TITLE);
+        return;
+      }
+      try {
+        const res = await globalThis.sendJsonData(STOP_ENDPOINT, { context: ctxid });
+        if (res?.ok) {
+          if (chatsStore?.selectedContext) {
+            chatsStore.selectedContext.running = false;
+          }
+          if (typeof globalThis.poll === "function") {
+            setTimeout(() => globalThis.poll(), 300);
+          }
+          if (res.was_running) {
+            toastFrontendSuccess("Process stopped.", PLUGIN_TITLE);
+          } else {
+            toastInfo("No process was running.");
+          }
+        } else {
+          toastFrontendError(res?.message || "Failed to stop the process.", PLUGIN_TITLE);
+        }
+      } catch (e) {
+        toastFrontendError("Error stopping the process: " + (e?.message || e), PLUGIN_TITLE);
+      }
+    };
+  </script>
+
+  <style>
+    .csl-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.45);
+      padding: 16px;
+    }
+
+    .csl-dialog {
+      width: 100%;
+      max-width: 380px;
+      background: var(--color-background, #1e1e1e);
+      color: var(--color-text, #e8e8e8);
+      border: 1px solid var(--color-border, #3a3a3a);
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+      font-size: 0.9rem;
+    }
+
+    .csl-title {
+      margin: 0 0 6px 0;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .csl-hint {
+      margin: 0 0 12px 0;
+      opacity: 0.7;
+      font-size: 0.8rem;
+      line-height: 1.35;
+    }
+
+    .csl-input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--color-border, #3a3a3a);
+      background: var(--color-background-secondary, #262626);
+      color: inherit;
+      font: inherit;
+    }
+
+    .csl-input:focus {
+      outline: none;
+      border-color: var(--color-highlight, #4a9eff);
+    }
+
+    .csl-error {
+      margin: 8px 0 0 0;
+      min-height: 1em;
+      font-size: 0.78rem;
+      color: #ff6b6b;
+    }
+
+    .csl-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .csl-btn {
+      padding: 7px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--color-border, #3a3a3a);
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .csl-btn:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.07);
+    }
+
+    .csl-btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .csl-save {
+      border-color: var(--color-highlight, #4a9eff);
+      background: var(--color-highlight, #4a9eff);
+      color: #fff;
+    }
+
+    /* Stop button: default disabled state */
+    .stop-process-btn {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* Stop button: active (running) state */
+    .stop-process-btn.stop-active {
+      color: #e74c3c !important;
+      opacity: 0.8 !important;
+      cursor: pointer !important;
+    }
+
+    .stop-process-btn.stop-active:hover {
+      background-color: rgba(231, 76, 60, 0.15) !important;
+      color: #c0392b !important;
+      opacity: 1 !important;
+    }
+
+    /* Hide all text labels on mobile so only icons remain */
+    @media (max-width: 768px) {
+      .chat-bottom-actions-bar .text-button span,
+      .chat-bottom-actions-bar .text-button p {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div x-data>
+    <template x-if="$store.chats">
+      <button type="button" class="text-button chat-share-button" @click="globalThis._copyChatShareUrl && globalThis._copyChatShareUrl()"
+        :disabled="!$store.chats.selected" title="Copy a shareable link to this chat"
+        aria-label="Copy a shareable link to this chat">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"
+          aria-hidden="true">
+          <path d="M3.9 12a4.1 4.1 0 0 1 4.1-4.1h3V6H8a6 6 0 0 0 0 12h3v-1.9H8A4.1 4.1 0 0 1 3.9 12Zm13.1-6h-3v1.9h3a4.1 4.1 0 0 1 0 8.2h-3V18h3a6 6 0 0 0 0-12Zm-8 5h6v2H9v-2Z" />
+        </svg>
+        <p>Copy URL</p>
+      </button>
+    </template>
+
+    <template x-if="$store.chats">
+      <button type="button" class="text-button chat-rename-button" @click="globalThis._openChatRename && globalThis._openChatRename()"
+        :disabled="!$store.chats.selected" title="Rename this chat" aria-label="Rename this chat">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"
+          aria-hidden="true">
+          <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83Z" />
+        </svg>
+        <p>Rename</p>
+      </button>
+    </template>
+
+    <template x-if="$store.chats">
+      <button type="button" class="text-button chat-close-button" @click="globalThis._closeCurrentChat && globalThis._closeCurrentChat()"
+        :disabled="!$store.chats.selected" title="Close this chat view" aria-label="Close this chat view">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"
+          aria-hidden="true">
+          <path d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12 5.7 16.89a1 1 0 1 0 1.41 1.41L12 13.41l4.89 4.89a1 1 0 0 0 1.41-1.41L13.41 12l4.89-4.89a1 1 0 0 0 0-1.4Z" />
+        </svg>
+        <p>Close</p>
+      </button>
+    </template>
+
+    <button type="button" class="text-button stop-process-btn" @click="globalThis._stopChatProcess && globalThis._stopChatProcess()"
+      :disabled="!$store.chats?.selectedContext?.running"
+      :class="{ 'stop-active': $store.chats?.selectedContext?.running }"
+      title="Stop the currently running process" aria-label="Stop the currently running process">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"
+        aria-hidden="true">
+        <rect x="6" y="6" width="12" height="12" rx="1" />
+      </svg>
+      <p>Stop</p>
+    </button>
+  </div>
+</body>
+
+</html>
