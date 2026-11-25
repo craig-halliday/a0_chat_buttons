@@ -30,7 +30,7 @@ The name is written to the chat's own `name` field through Agent Zero's chat per
 
 ### Close
 
-Clears the chat view and returns to the welcome screen without deleting anything. The conversation stays in the sidebar and can be reopened at any time. This is the "get this out of my face" action, not a destructive one.
+Clears the chat view and returns to the welcome screen without deleting anything. The conversation stays in the sidebar and can be reopened at any time.
 
 ### Stop
 
@@ -67,21 +67,20 @@ This is the destructive sibling of *Branch chat*: branching copies the chat and 
 | Mobile | Below 768px the button labels hide and only the icons remain. |
 | Feedback | Each action confirms with a notification toast, and errors are surfaced rather than swallowed. |
 
-## Installation
-
-1. Copy the `a0_chat_buttons` folder into `/a0/usr/plugins/`.
-2. Enable **A0 Chat Buttons** in *Settings → Plugins*.
-3. Reload the WebUI and open any chat.
-
-Or install it from **Plugins → Plugin Hub** once it is listed in the Agent Zero Plugin Index — the plugin is fetched and enabled for you, no file copying.
-
-No dependencies, no build step, no configuration and no settings screen.
-
 ## Requirements
 
 - Agent Zero with the plugin system enabled.
 - No external services, no network access, no API keys and no paid resources.
+- No dependencies, no build step, no configuration and no settings screen.
 - No Python dependencies, so the plugin ships no `hooks.py`: there is nothing to install, migrate or clean up. Enabling and disabling it in *Settings → Plugins* is the whole lifecycle.
+
+## Version history
+
+- **1.3.0** — Copy URL, Rename, Close and Stop controls on the chat input action bar.
+- **1.4.0** — Rewind control on finished answers, with history trimming for the agent's memory.
+- **1.5.0** — Active chat name chip in the model context strip, with inline rename.
+- **1.6.0** — Project prefix on the chip, shown in the project's colour; removed the competing chat-name hover tooltip.
+- **1.7.0** — Project prefix resolves the full project title from the projects list and follows project changes reactively. **First public release.**
 
 ## Files
 
