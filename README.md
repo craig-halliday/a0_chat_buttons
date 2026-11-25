@@ -18,7 +18,11 @@ Copies a deep link to the open chat (`?ctxid=...`) to the clipboard, so the conv
 
 The active chat's name is shown as a compact chip at the end of the model/context strip, prefixed with the owning project's full title in the project's colour when the chat belongs to a project (resolved from the projects list, since the chat context carries only a shortened title), next to the model selector and the context-window ring. Long project titles and chat names are ellipsised instead of pushing the strip wider, and only the pencil carries a hover tooltip.
 
-A pencil button sits inside the chip, so the chat can be renamed without leaving the row you are reading. Clicking the name itself opens the same dialog. The name is read from `$store.chats.selectedContext` through the store's `displayName()` helper, so it follows renames, parent-context labels and the default `Chat #N` fallback reactively, and it updates the sidebar and header at the same time.
+A pencil button sits inside the chip, so the chat can be renamed without leaving the row you are reading. Rename is confined to that pencil: clicking the name text never opens a dialog.
+
+Clicking the project name or the chat name instead opens a small panel showing both in full, which matters because both are ellipsised in the strip. The same click also reveals the chat in the sidebar — it scrolls the row into view and flashes it — so a long chat title that is cut off in the header can be found in the list immediately.
+
+The name is read from `$store.chats.selectedContext` through the store's `displayName()` helper, so it follows renames, parent-context labels and the default `Chat #N` fallback reactively, and it updates the sidebar and header at the same time.
 
 This chip is a WebUI extension mounted on the `model-context-strip-end` extension point, so it appears only when the bundled model selector strip is rendered. When that strip is hidden (no chat open, or the `_model_config` strip disabled), the chip is hidden with it and the Rename button on the action bar remains the fallback.
 
@@ -81,6 +85,7 @@ This is the destructive sibling of *Branch chat*: branching copies the chat and 
 - **1.5.0** — Active chat name chip in the model context strip, with inline rename.
 - **1.6.0** — Project prefix on the chip, shown in the project's colour; removed the competing chat-name hover tooltip.
 - **1.7.0** — Project prefix resolves the full project title from the projects list and follows project changes reactively. **First public release.**
+- **1.8.0** — Rename is confined to the pencil; clicking the project or chat name reveals both in full and highlights the chat in the sidebar list.
 
 ## Files
 

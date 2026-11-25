@@ -56,8 +56,57 @@
     globalThis.chatNameChip = function () {
       return {
         projectTitle: "",
+        detailsOpen: false,
+        revealHighlight: false,
+        detailsLeft: 0,
+        detailsTop: 0,
         refresh() {
           this.projectTitle = resolveProjectTitle();
+        },
+        toggleDetails(event) {
+          this.detailsOpen = !this.detailsOpen;
+          if (!this.detailsOpen) return;
+          const anchor = event?.currentTarget || null;
+          if (!anchor) return;
+          const chip = anchor.closest ? anchor.closest(".chat-name-chip") : null;
+          const rect = (chip || anchor).getBoundingClientRect();
+          const width = 340;
+          this.detailsLeft = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+          this.detailsTop = Math.round(rect.bottom + 6);
+          this.revealInSidebar();
+        },
+        revealInSidebar() {
+          const ctxid = chatsStore?.selected || globalThis.getContext?.();
+          if (!ctxid) return;
+          const name = currentDisplayName();
+          let row = null;
+          const rows = document.querySelectorAll(".sidebar-row-content .chat-container");
+          for (const candidate of rows) {
+            const stack = candidate._x_dataStack || [];
+            for (const scope of stack) {
+              try {
+                if (scope?.context?.id === ctxid) { row = candidate; break; }
+              } catch (_e) { }
+            }
+            if (row) break;
+          }
+          if (!row && name) {
+            for (const candidate of rows) {
+              const label = candidate.querySelector(".chat-name");
+              if (label && label.textContent.trim() === name.trim()) { row = candidate; break; }
+            }
+          }
+          if (!row) return;
+          const sidebar = document.querySelector("#sidebar");
+          if (sidebar && sidebar.classList.contains("sidebar-closed")) {
+            try { globalThis.toggleSidebar?.(); } catch (_e) { }
+          }
+          try { row.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (_e) { row.scrollIntoView(); }
+          row.classList.add("a0cb-reveal-row");
+          setTimeout(() => row.classList.remove("a0cb-reveal-row"), 2200);
+        },
+        closeDetails() {
+          this.detailsOpen = false;
         },
         async init() {
           this.refresh();
@@ -310,6 +359,69 @@
       flex: 0 0 auto;
     }
 
+    .chat-name-label,
+    .chat-name-project {
+      cursor: pointer;
+    }
+
+    .chat-name-label:hover,
+    .chat-name-project:hover {
+      text-decoration: underline dotted;
+      text-underline-offset: 2px;
+    }
+
+    .a0cb-reveal-row {
+      border-radius: 8px;
+      animation: a0cb-reveal-pulse 2.2s ease-out;
+    }
+
+    @keyframes a0cb-reveal-pulse {
+      0%, 35% {
+        background-color: color-mix(in srgb, var(--color-highlight, #4a9eff) 26%, transparent);
+        box-shadow: inset 0 0 0 1px var(--color-highlight, #4a9eff);
+      }
+      100% {
+        background-color: transparent;
+        box-shadow: none;
+      }
+    }
+
+    .chat-name-details {
+      position: fixed;
+      z-index: 100050;
+      width: min(340px, calc(100vw - 16px));
+      display: grid;
+      gap: 6px;
+      padding: 10px 12px;
+      border: 1px solid var(--color-border, #3a3a3a);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--color-panel, #1e1e1e) 92%, black 8%);
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4);
+      font-size: 0.74rem;
+      line-height: 1.45;
+    }
+
+    .chat-name-details-row {
+      display: grid;
+      grid-template-columns: 3.4rem minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+    }
+
+    .chat-name-details-key {
+      padding-top: 0.12rem;
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      opacity: 0.6;
+    }
+
+    .chat-name-details-value {
+      color: var(--color-text, #e8e8e8);
+      overflow-wrap: anywhere;
+    }
+
     .chat-name-rename-btn {
       display: inline-grid;
       place-items: center;
@@ -342,25 +454,51 @@
   <div x-data="chatNameChip()">
     <template x-if="$store.chats">
       <template x-if="$store.chats.selectedContext">
-        <div class="chat-name-chip">
+        <div class="chat-name-chip" @click.outside="closeDetails()" @keydown.escape.window="closeDetails()">
           <template x-if="projectTitle">
             <span class="chat-name-project"
+              role="button" tabindex="0"
               :style="{ color: $store.chats.selectedContext.project?.color || 'inherit' }"
+              @click.stop="toggleDetails($event)"
+              @keydown.enter.prevent.stop="toggleDetails($event)"
+              @keydown.space.prevent.stop="toggleDetails($event)"
               x-text="projectTitle"></span>
           </template>
           <template x-if="projectTitle">
             <span class="chat-name-sep" aria-hidden="true">&middot;</span>
           </template>
           <span class="chat-name-label"
-            @click="globalThis._openChatNameRename && globalThis._openChatNameRename()"
+            role="button" tabindex="0"
+            @click.stop="toggleDetails($event)"
+            @keydown.enter.prevent.stop="toggleDetails($event)"
+            @keydown.space.prevent.stop="toggleDetails($event)"
             x-text="$store.chats.displayName($store.chats.selectedContext)"></span>
           <button type="button" class="chat-name-rename-btn"
-            @click.stop="globalThis._openChatNameRename && globalThis._openChatNameRename()"
+            @click.stop="closeDetails(); globalThis._openChatNameRename && globalThis._openChatNameRename()"
             title="Rename this chat" aria-label="Rename this chat">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83Z" />
             </svg>
           </button>
+          <template x-if="detailsOpen">
+            <div class="chat-name-details"
+              :style="`left:${detailsLeft}px; top:${detailsTop}px;`"
+              @click.stop role="dialog" aria-label="Full project and chat name">
+              <template x-if="projectTitle">
+                <div class="chat-name-details-row">
+                  <span class="chat-name-details-key">Project</span>
+                  <span class="chat-name-details-value"
+                    :style="{ color: $store.chats.selectedContext.project?.color || 'inherit' }"
+                    x-text="projectTitle"></span>
+                </div>
+              </template>
+              <div class="chat-name-details-row">
+                <span class="chat-name-details-key">Chat</span>
+                <span class="chat-name-details-value"
+                  x-text="$store.chats.displayName($store.chats.selectedContext)"></span>
+              </div>
+            </div>
+          </template>
         </div>
       </template>
     </template>
