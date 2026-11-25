@@ -58,6 +58,7 @@
         projectTitle: "",
         detailsOpen: false,
         revealHighlight: false,
+        sidebarHint: "",
         detailsLeft: 0,
         detailsTop: 0,
         refresh() {
@@ -65,7 +66,7 @@
         },
         toggleDetails(event) {
           this.detailsOpen = !this.detailsOpen;
-          if (!this.detailsOpen) return;
+          if (!this.detailsOpen) { this.sidebarHint = ""; return; }
           const anchor = event?.currentTarget || null;
           if (!anchor) return;
           const chip = anchor.closest ? anchor.closest(".chat-name-chip") : null;
@@ -78,6 +79,12 @@
         revealInSidebar() {
           const ctxid = chatsStore?.selected || globalThis.getContext?.();
           if (!ctxid) return;
+          const sidebarOpen = globalThis.Alpine?.store?.("sidebar")?.isOpen === true;
+          if (!sidebarOpen) {
+            this.sidebarHint = "Open the sidebar first to see this chat in the list.";
+            return;
+          }
+          this.sidebarHint = "";
           const name = currentDisplayName();
           let row = null;
           const rows = document.querySelectorAll(".sidebar-row-content .chat-container");
@@ -97,10 +104,6 @@
             }
           }
           if (!row) return;
-          const sidebar = document.querySelector("#sidebar");
-          if (sidebar && sidebar.classList.contains("sidebar-closed")) {
-            try { globalThis.toggleSidebar?.(); } catch (_e) { }
-          }
           try { row.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (_e) { row.scrollIntoView(); }
           row.classList.add("a0cb-reveal-row");
           setTimeout(() => row.classList.remove("a0cb-reveal-row"), 2200);
@@ -386,6 +389,16 @@
       }
     }
 
+    .chat-name-details-hint {
+      margin-top: 2px;
+      padding-top: 7px;
+      border-top: 1px solid var(--color-border, #3a3a3a);
+      font-size: 0.68rem;
+      line-height: 1.4;
+      color: color-mix(in srgb, var(--color-warning, #e6a23c) 88%, white 12%);
+      overflow-wrap: anywhere;
+    }
+
     .chat-name-details {
       position: fixed;
       z-index: 100050;
@@ -497,6 +510,9 @@
                 <span class="chat-name-details-value"
                   x-text="$store.chats.displayName($store.chats.selectedContext)"></span>
               </div>
+              <template x-if="sidebarHint">
+                <div class="chat-name-details-hint" x-text="sidebarHint"></div>
+              </template>
             </div>
           </template>
         </div>

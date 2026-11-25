@@ -20,7 +20,7 @@ The active chat's name is shown as a compact chip at the end of the model/contex
 
 A pencil button sits inside the chip, so the chat can be renamed without leaving the row you are reading. Rename is confined to that pencil: clicking the name text never opens a dialog.
 
-Clicking the project name or the chat name instead opens a small panel showing both in full, which matters because both are ellipsised in the strip. The same click also reveals the chat in the sidebar — it scrolls the row into view and flashes it — so a long chat title that is cut off in the header can be found in the list immediately.
+Clicking the project name or the chat name instead opens a small panel showing both in full, which matters because both are ellipsised in the strip. The same click also reveals the chat in the sidebar — it scrolls the row into view and flashes it — so a long chat title that is cut off in the header can be found in the list immediately. This reveal only runs when the sidebar is open; with the sidebar collapsed the panel says so instead of forcing the sidebar open.
 
 The name is read from `$store.chats.selectedContext` through the store's `displayName()` helper, so it follows renames, parent-context labels and the default `Chat #N` fallback reactively, and it updates the sidebar and header at the same time.
 
@@ -86,6 +86,7 @@ This is the destructive sibling of *Branch chat*: branching copies the chat and 
 - **1.6.0** — Project prefix on the chip, shown in the project's colour; removed the competing chat-name hover tooltip.
 - **1.7.0** — Project prefix resolves the full project title from the projects list and follows project changes reactively. **First public release.**
 - **1.8.0** — Rename is confined to the pencil; clicking the project or chat name reveals both in full and highlights the chat in the sidebar list.
+- **1.8.1** — Sidebar reveal checks the real sidebar state; a collapsed sidebar shows a hint instead of silently failing.
 
 ## Files
 
