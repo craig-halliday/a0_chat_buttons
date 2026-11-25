@@ -1,6 +1,6 @@
 # A0 Chat Buttons — Agent Zero plugin
 
-Five chat controls: **Copy URL**, **Rename**, **Close** and **Stop** sit in a single row on the chat input action bar, the **active chat name** showing its project with inline rename sits in the model strip, and **Rewind** sits on every finished answer.
+Four buttons — **Copy URL**, **Rename**, **Close** and **Stop** — sit in a single row on the chat input action bar. A **chat name chip** with inline rename sits in the model strip, and **Rewind** sits on every finished answer.
 
 Agent Zero gives you *Pause* and *Nudge*, and chat management lives in the sidebar. What is missing is a fast row of controls attached to the chat you are actually reading. This plugin puts sharing, naming, dismissing and cancelling one click away from the message box.
 
@@ -13,6 +13,8 @@ Agent Zero gives you *Pause* and *Nudge*, and chat management lives in the sideb
 Copies a deep link to the open chat (`?ctxid=...`) to the clipboard, so the conversation can be reopened in another tab, another browser or on another device. The link is built from the current page address with the chat id appended, which keeps it valid for whatever host and port you run Agent Zero on. Falls back to a hidden textarea when the Clipboard API is unavailable on non-secure origins.
 
 ### Chat name and inline rename
+
+![Chat name chip](docs/chat-name-chip.png)
 
 The active chat's name is shown as a compact chip at the end of the model/context strip, prefixed with the owning project's full title in the project's colour when the chat belongs to a project (resolved from the projects list, since the chat context carries only a shortened title), next to the model selector and the context-window ring. Long project titles and chat names are ellipsised instead of pushing the strip wider, and only the pencil carries a hover tooltip.
 
@@ -70,6 +72,8 @@ This is the destructive sibling of *Branch chat*: branching copies the chat and 
 1. Copy the `a0_chat_buttons` folder into `/a0/usr/plugins/`.
 2. Enable **A0 Chat Buttons** in *Settings → Plugins*.
 3. Reload the WebUI and open any chat.
+
+Or install it from **Plugins → Plugin Hub** once it is listed in the Agent Zero Plugin Index — the plugin is fetched and enabled for you, no file copying.
 
 No dependencies, no build step, no configuration and no settings screen.
 
