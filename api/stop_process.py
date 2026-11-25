@@ -4,6 +4,9 @@ import asyncio
 from helpers.api import ApiHandler, Input, Output, Request, Response
 from helpers.print_style import PrintStyle
 
+# ETX (Ctrl+C) sent to interrupt interactive terminal sessions.
+CTRL_C = "\x03"
+
 
 class StopProcess(ApiHandler):
     """Stop/cancel the currently running agent process in a given context.
@@ -69,7 +72,7 @@ class StopProcess(ApiHandler):
                         if hasattr(tty, "send"):
                             try:
                                 await asyncio.wait_for(
-                                    tty.send("\x03"),  # Ctrl+C
+                                    tty.send(CTRL_C),  # Ctrl+C (ETX)
                                     timeout=1.0
                                 )
                             except (asyncio.TimeoutError, Exception):

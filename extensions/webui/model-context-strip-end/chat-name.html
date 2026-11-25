@@ -1,0 +1,370 @@
+<html>
+
+<head>
+  <script type="module">
+    import { store as chatsStore } from "/components/sidebar/chats/chats-store.js";
+    import { toastFrontendError, toastFrontendSuccess } from "/components/notifications/notification-store.js";
+
+    const PLUGIN_TITLE = "A0 Chat Buttons";
+    const RENAME_ENDPOINT = "/plugins/a0_chat_buttons/rename_chat";
+    const MAX_NAME_LENGTH = 120;
+
+    function currentContextId() {
+      try {
+        const id = chatsStore?.selected || globalThis.getContext?.();
+        return id ? String(id) : "";
+      } catch (_e) {
+        return "";
+      }
+    }
+
+    function currentContextRow() {
+      const id = currentContextId();
+      if (!id) return null;
+      try {
+        return (chatsStore?.contexts || []).find((row) => row.id === id) || null;
+      } catch (_e) {
+        return null;
+      }
+    }
+
+    function currentDisplayName() {
+      const row = currentContextRow();
+      if (!row) return "";
+      try {
+        const label = chatsStore?.displayName?.(row);
+        if (label) return String(label);
+      } catch (_e) { }
+      return row.name ? String(row.name) : "";
+    }
+
+    /* ---------------- Project title ---------------- */
+
+    // selectedContext.project.title is shortened for sidebar display, so the
+    // full title is resolved from the projects store list by project name.
+    function resolveProjectTitle() {
+      let ctx = null;
+      let list = [];
+      try { ctx = chatsStore?.selectedContext; } catch (_e) { }
+      const project = ctx?.project;
+      if (!project?.name) return "";
+      try { list = globalThis.Alpine?.store?.("projects")?.projectList || []; } catch (_e) { }
+      const hit = list.find((row) => row && row.name === project.name);
+      return String(hit?.title || project.title || project.name || "").trim();
+    }
+
+    globalThis.chatNameChip = function () {
+      return {
+        projectTitle: "",
+        refresh() {
+          this.projectTitle = resolveProjectTitle();
+        },
+        async init() {
+          this.refresh();
+          try { this.$watch("$store.chats.selectedContext", () => this.refresh()); } catch (_e) { }
+          try { this.$watch("$store.projects.projectList", () => this.refresh()); } catch (_e) { }
+          const projects = globalThis.Alpine?.store?.("projects");
+          if (
+            projects &&
+            (projects.projectList || []).length === 0 &&
+            typeof projects.loadProjectsList === "function"
+          ) {
+            try { await projects.loadProjectsList(); } catch (_e) { }
+            this.refresh();
+          }
+        },
+      };
+    };
+
+    /* ---------------- Rename dialog ---------------- */
+
+    let renameOverlay = null;
+
+    function closeRenameDialog() {
+      if (!renameOverlay) return;
+      const node = renameOverlay;
+      renameOverlay = null;
+      node.remove();
+    }
+
+    async function submitRename(ctxid, input, errorEl, saveBtn) {
+      const name = String(input.value || "").trim();
+      if (name.length > MAX_NAME_LENGTH) {
+        errorEl.textContent = `Name is too long (max ${MAX_NAME_LENGTH} characters).`;
+        return;
+      }
+
+      errorEl.textContent = "";
+      saveBtn.disabled = true;
+      input.disabled = true;
+      try {
+        await globalThis.sendJsonData(RENAME_ENDPOINT, { context: ctxid, name });
+        closeRenameDialog();
+        toastFrontendSuccess(name ? "Chat renamed." : "Chat name reset.", PLUGIN_TITLE);
+        if (typeof globalThis.poll === "function") setTimeout(() => globalThis.poll(), 250);
+      } catch (e) {
+        errorEl.textContent = "Could not rename the chat: " + (e?.message || e);
+      } finally {
+        saveBtn.disabled = false;
+        input.disabled = false;
+        input.focus();
+      }
+    }
+
+    globalThis._openChatNameRename = function () {
+      const ctxid = currentContextId();
+      if (!ctxid) {
+        toastFrontendError("Open a chat first, then rename it.", PLUGIN_TITLE);
+        return;
+      }
+      if (renameOverlay) {
+        renameOverlay.querySelector("input")?.focus();
+        return;
+      }
+
+      const overlay = document.createElement("div");
+      overlay.className = "csl-overlay";
+      overlay.innerHTML = `
+        <div class="csl-dialog" role="dialog" aria-modal="true" aria-label="Rename chat">
+          <h3 class="csl-title">Rename chat</h3>
+          <p class="csl-hint">Leave the field empty to restore the default name.</p>
+          <input class="csl-input" type="text" maxlength="${MAX_NAME_LENGTH}" placeholder="Chat name" />
+          <p class="csl-error" role="alert"></p>
+          <div class="csl-actions">
+            <button type="button" class="csl-btn csl-cancel">Cancel</button>
+            <button type="button" class="csl-btn csl-save">Save</button>
+          </div>
+        </div>`;
+
+      const input = overlay.querySelector("input");
+      const errorEl = overlay.querySelector(".csl-error");
+      const saveBtn = overlay.querySelector(".csl-save");
+      const cancelBtn = overlay.querySelector(".csl-cancel");
+
+      input.value = currentDisplayName();
+
+      const onKeyDown = (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeRenameDialog();
+        } else if (event.key === "Enter") {
+          event.preventDefault();
+          submitRename(ctxid, input, errorEl, saveBtn);
+        }
+      };
+
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) closeRenameDialog();
+      });
+      cancelBtn.addEventListener("click", closeRenameDialog);
+      saveBtn.addEventListener("click", () => submitRename(ctxid, input, errorEl, saveBtn));
+      overlay.addEventListener("keydown", onKeyDown);
+
+      document.body.appendChild(overlay);
+      renameOverlay = overlay;
+
+      setTimeout(() => {
+        input.focus();
+        input.select();
+      }, 30);
+    };
+  </script>
+
+  <style>
+    .csl-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.45);
+      padding: 16px;
+    }
+
+    .csl-dialog {
+      width: 100%;
+      max-width: 380px;
+      background: var(--color-background, #1e1e1e);
+      color: var(--color-text, #e8e8e8);
+      border: 1px solid var(--color-border, #3a3a3a);
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+      font-size: 0.9rem;
+    }
+
+    .csl-title {
+      margin: 0 0 6px 0;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .csl-hint {
+      margin: 0 0 12px 0;
+      opacity: 0.7;
+      font-size: 0.8rem;
+      line-height: 1.35;
+    }
+
+    .csl-input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--color-border, #3a3a3a);
+      background: var(--color-background-secondary, #262626);
+      color: inherit;
+      font: inherit;
+    }
+
+    .csl-input:focus {
+      outline: none;
+      border-color: var(--color-highlight, #4a9eff);
+    }
+
+    .csl-error {
+      margin: 8px 0 0 0;
+      min-height: 1em;
+      font-size: 0.78rem;
+      color: #ff6b6b;
+    }
+
+    .csl-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .csl-btn {
+      padding: 7px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--color-border, #3a3a3a);
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .csl-btn:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.07);
+    }
+
+    .csl-btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .csl-save {
+      border-color: var(--color-highlight, #4a9eff);
+      background: var(--color-highlight, #4a9eff);
+      color: #fff;
+    }
+
+    /* Chat name chip in the model/context strip */
+    .chat-name-chip {
+      /* Keep the chip last in the strip regardless of plugin load order */
+      order: 999;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      max-width: 22rem;
+      padding: 2px 4px 2px 8px;
+      border: 1px solid var(--color-border, #3a3a3a);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--color-text) 6%, transparent);
+      line-height: 1.6;
+    }
+
+    .chat-name-label {
+      min-width: 0;
+      max-width: 16rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--color-text);
+      opacity: 0.85;
+      cursor: pointer;
+    }
+
+    .chat-name-project {
+      min-width: 0;
+      max-width: 14rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      opacity: 0.9;
+      flex: 0 1 auto;
+    }
+
+    .chat-name-sep {
+      font-size: 0.68rem;
+      opacity: 0.45;
+      flex: 0 0 auto;
+    }
+
+    .chat-name-rename-btn {
+      display: inline-grid;
+      place-items: center;
+      width: 1.15rem;
+      height: 1.15rem;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--color-text);
+      opacity: 0.55;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+
+    .chat-name-rename-btn:hover {
+      opacity: 1;
+      background: var(--color-background-hover, rgba(255, 255, 255, 0.08));
+    }
+
+    .chat-name-rename-btn svg {
+      width: 11px;
+      height: 11px;
+      fill: currentColor;
+    }
+  </style>
+</head>
+
+<body>
+  <div x-data="chatNameChip()">
+    <template x-if="$store.chats">
+      <template x-if="$store.chats.selectedContext">
+        <div class="chat-name-chip">
+          <template x-if="projectTitle">
+            <span class="chat-name-project"
+              :style="{ color: $store.chats.selectedContext.project?.color || 'inherit' }"
+              x-text="projectTitle"></span>
+          </template>
+          <template x-if="projectTitle">
+            <span class="chat-name-sep" aria-hidden="true">&middot;</span>
+          </template>
+          <span class="chat-name-label"
+            @click="globalThis._openChatNameRename && globalThis._openChatNameRename()"
+            x-text="$store.chats.displayName($store.chats.selectedContext)"></span>
+          <button type="button" class="chat-name-rename-btn"
+            @click.stop="globalThis._openChatNameRename && globalThis._openChatNameRename()"
+            title="Rename this chat" aria-label="Rename this chat">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm17.71-10.21a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83Z" />
+            </svg>
+          </button>
+        </div>
+      </template>
+    </template>
+  </div>
+</body>
+
+</html>
