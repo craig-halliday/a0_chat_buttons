@@ -1,7 +1,7 @@
 name: a0_chat_buttons
 title: A0 Chat Buttons
-version: 1.8.1
-description: Adds Copy URL, Rename, Close and Stop buttons to the chat input action bar, shows the active chat name with an inline rename control in the model/context strip, plus a Rewind button on every finished answer that deletes that answer and everything after it.
+version: 1.9.0
+description: Adds Copy URL, Rename, Close and Stop buttons to the chat input action bar, a move-to-project button on every sidebar chat row, an active chat name chip with inline rename in the model/context strip, plus a Rewind button on every finished answer.
 settings_sections: []
 per_project_config: false
 per_agent_config: false

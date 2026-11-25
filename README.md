@@ -1,6 +1,6 @@
 # A0 Chat Buttons — Agent Zero plugin
 
-Four buttons — **Copy URL**, **Rename**, **Close** and **Stop** — sit in a single row on the chat input action bar. A **chat name chip** with inline rename sits in the model strip, and **Rewind** sits on every finished answer.
+Four buttons — **Copy URL**, **Rename**, **Close** and **Stop** — sit in a single row on the chat input action bar. A **chat name chip** with inline rename sits in the model strip, a **move-to-project** button sits on every sidebar chat row, and **Rewind** sits on every finished answer.
 
 Agent Zero gives you *Pause* and *Nudge*, and chat management lives in the sidebar. What is missing is a fast row of controls attached to the chat you are actually reading. This plugin puts sharing, naming, dismissing and cancelling one click away from the message box.
 
@@ -61,6 +61,14 @@ Three rules keep it predictable:
 
 This is the destructive sibling of *Branch chat*: branching copies the chat and keeps the original, rewind trims the chat you are already in.
 
+### Move to project
+
+Every chat row in the sidebar gets a move button immediately to the right of its close icon. Clicking it opens a dropdown listing **No project** plus every project, each drawn with its colour ball, with the chat's current project check-marked.
+
+Picking an entry moves the chat in place. The dropdown is used instead of flinging the chat across the UI, because chat management belongs in the sidebar and this keeps the chat you are reading where it is. The list is fixed-positioned and flips upwards near the bottom of the viewport; it closes on outside click, `Escape`, or a window resize.
+
+The project change goes through the same `projects` API action the project switcher uses (`activate`, or `deactivate` when you pick *No project*), so the chat's project, colour ball and sidebar grouping update everywhere at once.
+
 ## Behaviour notes
 
 | Behaviour | Detail |
@@ -68,6 +76,7 @@ This is the destructive sibling of *Branch chat*: branching copies the chat and 
 | Availability | The input-bar buttons are disabled when no chat is open. The action bar only renders with an open chat, so nothing appears on the welcome screen. |
 | Rewind placement | The Rewind button only appears on finished answers, never on process, tool or status rows. |
 | Scope | Every action applies to the active chat only. Other chats are never touched. |
+| Move button | Appears on every sidebar chat row, to the right of the close icon. Applies only to the row you clicked. |
 | Mobile | Below 768px the button labels hide and only the icons remain. |
 | Feedback | Each action confirms with a notification toast, and errors are surfaced rather than swallowed. |
 
@@ -87,6 +96,7 @@ This is the destructive sibling of *Branch chat*: branching copies the chat and 
 - **1.7.0** — Project prefix resolves the full project title from the projects list and follows project changes reactively. **First public release.**
 - **1.8.0** — Rename is confined to the pencil; clicking the project or chat name reveals both in full and highlights the chat in the sidebar list.
 - **1.8.1** — Sidebar reveal checks the real sidebar state; a collapsed sidebar shows a hint instead of silently failing.
+- **1.9.0** — Move-to-project button on every sidebar chat row, with a project dropdown and a No project option.
 
 ## Files
 
@@ -101,6 +111,8 @@ a0_chat_buttons/
     chat-buttons.html         # the input-bar buttons, rename dialog and styles
   extensions/webui/model-context-strip-end/
     chat-name.html            # active chat name chip with inline rename
+  extensions/webui/sidebar-chats-list-end/
+    move-chat-button.html     # move-to-project button and dropdown on each sidebar row
   extensions/webui/set_messages_after_loop/
     inject-rewind-button.js   # the Rewind button on finished answers
   docs/

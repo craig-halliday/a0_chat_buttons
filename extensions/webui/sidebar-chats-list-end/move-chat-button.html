@@ -1,0 +1,336 @@
+<html>
+
+<head>
+  <script type="module">
+    import { callJsonApi } from "/js/api.js";
+    import {
+      toastFrontendError,
+      toastFrontendSuccess,
+    } from "/components/notifications/notification-store.js";
+
+    const PLUGIN_TITLE = "A0 Chat Buttons";
+    const BUTTON_CLASS = "a0cb-move-btn";
+    const MENU_CLASS = "a0cb-move-menu";
+    const STYLE_ID = "a0cb-move-styles";
+    const ROW_SELECTOR = ".sidebar-row-content .chat-container";
+
+    let menu = null;
+    let observer = null;
+
+    function readContext(row) {
+      const anchors = [row, row?.closest?.(".sidebar-row-content"), row?.parentElement];
+      for (const element of anchors) {
+        const stack = element?._x_dataStack || [];
+        for (const scope of stack) {
+          try {
+            if (scope?.context?.id) return scope.context;
+          } catch (_e) { }
+        }
+      }
+      const label = (row?.querySelector(".chat-name")?.textContent || "").trim();
+      if (label) {
+        const store = globalThis.Alpine?.store?.("chats");
+        const list = store?.contexts || [];
+        const hit = list.find(
+          (item) => (store?.displayName?.(item) || item?.name || "").trim() === label
+        );
+        if (hit) return hit;
+      }
+      return null;
+    }
+
+    function projectStore() {
+      try {
+        return globalThis.Alpine?.store?.("projects") || null;
+      } catch (_e) {
+        return null;
+      }
+    }
+
+    function closeMenu() {
+      if (!menu) return;
+      menu.remove();
+      menu = null;
+      document.removeEventListener("click", onDocumentClick, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("resize", closeMenu);
+    }
+
+    function onDocumentClick(event) {
+      if (menu && !menu.contains(event.target)) closeMenu();
+    }
+
+    function onKeyDown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMenu();
+      }
+    }
+
+    async function loadProjects() {
+      const store = projectStore();
+      if (!store) return [];
+      if (
+        (store.projectList || []).length === 0 &&
+        typeof store.loadProjectsList === "function"
+      ) {
+        try { await store.loadProjectsList(); } catch (_e) { }
+      }
+      return store.projectList || [];
+    }
+
+    async function applyMove(row, projectName) {
+      const context = readContext(row);
+      if (!context?.id) {
+        toastFrontendError("Could not resolve which chat to move.", PLUGIN_TITLE);
+        return;
+      }
+      try {
+        const payload = {
+          action: projectName ? "activate" : "deactivate",
+          context_id: context.id,
+        };
+        if (projectName) payload.name = projectName;
+
+        const response = await callJsonApi("projects", payload);
+        if (response?.ok === false) {
+          toastFrontendError(
+            response?.error || "The project change was rejected.",
+            PLUGIN_TITLE
+          );
+          return;
+        }
+
+        toastFrontendSuccess(
+          projectName ? `Chat moved to ${projectName}.` : "Chat removed from its project.",
+          PLUGIN_TITLE
+        );
+
+        const store = projectStore();
+        if (store && typeof store.loadProjectsList === "function") {
+          try { await store.loadProjectsList(); } catch (_e) { }
+        }
+        if (typeof globalThis.poll === "function") globalThis.poll();
+      } catch (error) {
+        toastFrontendError(
+          "Could not move the chat: " + (error?.message || error),
+          PLUGIN_TITLE
+        );
+      }
+    }
+
+    async function openMenu(row, anchor) {
+      closeMenu();
+      const context = readContext(row);
+      const current = context?.project?.name || "";
+      const projects = await loadProjects();
+
+      const panel = document.createElement("div");
+      panel.className = MENU_CLASS;
+      panel.setAttribute("role", "menu");
+      panel.setAttribute("aria-label", "Move chat to project");
+      panel.addEventListener("click", (event) => event.stopPropagation());
+
+      const header = document.createElement("div");
+      header.className = "a0cb-move-menu-header";
+      header.textContent = "Move chat to";
+      panel.appendChild(header);
+
+      const addItem = (name, title, color, isCurrent) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "a0cb-move-item" + (isCurrent ? " is-current" : "");
+        item.setAttribute("role", "menuitem");
+
+        const ball = document.createElement("span");
+        ball.className = "a0cb-move-ball";
+        if (color) {
+          ball.style.backgroundColor = color;
+        } else {
+          ball.style.border = "1px solid var(--color-border, #3a3a3a)";
+        }
+
+        const label = document.createElement("span");
+        label.className = "a0cb-move-label";
+        label.textContent = title;
+
+        item.appendChild(ball);
+        item.appendChild(label);
+
+        if (isCurrent) {
+          const check = document.createElement("span");
+          check.className = "a0cb-move-check";
+          check.textContent = "\u2713";
+          item.appendChild(check);
+        }
+
+        item.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          closeMenu();
+          await applyMove(row, name);
+        });
+
+        panel.appendChild(item);
+      };
+
+      addItem("", "No project", "", !current);
+      for (const project of projects) {
+        addItem(
+          project.name,
+          project.title || project.name,
+          project.color,
+          project.name === current
+        );
+      }
+
+      document.body.appendChild(panel);
+      menu = panel;
+
+      const rect = anchor.getBoundingClientRect();
+      const width = panel.offsetWidth || 262;
+      const height = panel.offsetHeight || 220;
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+      let top = rect.bottom + 4;
+      if (top + height > window.innerHeight - 8) {
+        top = Math.max(8, rect.top - height - 4);
+      }
+      panel.style.left = `${Math.round(left)}px`;
+      panel.style.top = `${Math.round(top)}px`;
+
+      document.addEventListener("click", onDocumentClick, true);
+      document.addEventListener("keydown", onKeyDown, true);
+      window.addEventListener("resize", closeMenu);
+    }
+
+    function makeButton(row) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `btn-icon-action chat-list-action-btn ${BUTTON_CLASS}`;
+      button.title = "Move chat to a project";
+      button.setAttribute("aria-label", "Move chat to a project");
+      button.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true">' +
+        '<path d="M4 11h11.2l-4.1-4.1L12.5 5.5 19 12l-6.5 6.5-1.4-1.4 4.1-4.1H4z"/>' +
+        "</svg>";
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        openMenu(row, button);
+      });
+      return button;
+    }
+
+    function findCloseButton(row) {
+      const buttons = row.querySelectorAll("button.chat-list-action-btn");
+      for (const button of buttons) {
+        if (button.classList.contains(BUTTON_CLASS)) continue;
+        const title = (
+          button.getAttribute("title") ||
+          button.getAttribute("data-bs-original-title") ||
+          ""
+        ).trim();
+        const icon = (button.textContent || "").trim();
+        if (title === "Close chat" || icon === "close") return button;
+      }
+      return null;
+    }
+
+    function decorate(row) {
+      if (!row || row.querySelector(`.${BUTTON_CLASS}`)) return;
+      const closeButton = findCloseButton(row);
+      if (!closeButton) return;
+      closeButton.insertAdjacentElement("afterend", makeButton(row));
+    }
+
+    function scan() {
+      document.querySelectorAll(ROW_SELECTOR).forEach(decorate);
+    }
+
+    function injectStyles() {
+      if (document.getElementById(STYLE_ID)) return;
+      const style = document.createElement("style");
+      style.id = STYLE_ID;
+      style.textContent = `
+        .a0cb-move-menu {
+          position: fixed;
+          z-index: 100060;
+          width: 262px;
+          max-height: 320px;
+          overflow-y: auto;
+          padding: 6px;
+          border: 1px solid var(--color-border, #3a3a3a);
+          border-radius: 10px;
+          background: color-mix(in srgb, var(--color-panel, #1e1e1e) 94%, black 6%);
+          box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42);
+        }
+        .a0cb-move-menu-header {
+          padding: 4px 8px 6px;
+          font-size: 0.62rem;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          opacity: 0.6;
+        }
+        .a0cb-move-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: 100%;
+          padding: 6px 8px;
+          border: 0;
+          border-radius: 6px;
+          background: transparent;
+          color: var(--color-text, #e8e8e8);
+          font: inherit;
+          font-size: 0.74rem;
+          text-align: left;
+          cursor: pointer;
+        }
+        .a0cb-move-item:hover {
+          background: var(--color-background-hover, rgba(255, 255, 255, 0.08));
+        }
+        .a0cb-move-item.is-current {
+          background: color-mix(in srgb, var(--color-highlight, #4a9eff) 16%, transparent);
+        }
+        .a0cb-move-ball {
+          width: 0.55rem;
+          height: 0.55rem;
+          border-radius: 50%;
+          flex: 0 0 auto;
+        }
+        .a0cb-move-label {
+          flex: 1 1 auto;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .a0cb-move-check {
+          flex: 0 0 auto;
+          font-size: 0.7rem;
+          color: var(--color-highlight, #4a9eff);
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    function init() {
+      if (globalThis.__a0cbMoveChatInit) {
+        scan();
+        return;
+      }
+      globalThis.__a0cbMoveChatInit = true;
+      injectStyles();
+      scan();
+      loadProjects();
+
+      observer = new MutationObserver(() => scan());
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    init();
+  </script>
+</head>
+
+<body></body>
+
+</html>
